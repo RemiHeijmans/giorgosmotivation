@@ -5,8 +5,9 @@ import time
 import threading
 import os
 
+
 class GiorgosApp:
-    def __init__(self, idle_path, walk_path, gesture_path):
+    def __init__(self, idle_path, walk_path, gesture_path, lines_path):
         self.root = tk.Tk()
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
@@ -31,7 +32,16 @@ class GiorgosApp:
         self.gesturing = False
         self.last_wander_time = time.time()
 
+        # Load quote lines
+        self.quote_label = None
+        self.quote_visible = False
+        self.lines_path = lines_path
+        with open(lines_path, 'r', encoding='utf-8') as f:
+            self.quotes = [line.strip() for line in f if line.strip()]
+
+        # Start behavior and quote threads
         threading.Thread(target=self.behavior_loop, daemon=True).start()
+        threading.Thread(target=self.say_random_quote_loop, daemon=True).start()
 
     def animate_gesture(self, event=None):
         if not self.gesturing:
@@ -40,8 +50,62 @@ class GiorgosApp:
             self.root.after(400, self.end_gesture)
 
     def end_gesture(self):
-        self.gesturing = False
-        self.canvas.itemconfig(self.current_image, image=self.idle_image)
+        if not self.quote_visible:  # Only go back to idle if not showing a quote
+            self.gesturing = False
+            self.canvas.itemconfig(self.current_image, image=self.idle_image)
+
+    def say_random_quote_loop(self):
+        while self.running:
+            time.sleep(random.randint(10, 20))  # Wait between 10 and 20 seconds
+            if not self.quote_visible and not self.gesturing:
+                quote = random.choice(self.quotes)
+                self.show_quote(quote)
+
+    def show_quote(self, text):
+        self.quote_visible = True
+        self.gesturing = True
+        self.canvas.itemconfig(self.current_image, image=self.gesture_image)
+
+        if self.quote_label:
+            self.quote_label.destroy()
+
+        parts = [part.strip() for part in text.split('-') if part.strip()]
+        current_index = 0
+
+        def show_part(index):
+            nonlocal current_index
+            if self.quote_label:
+                self.quote_label.destroy()
+
+            self.quote_label = tk.Label(
+                self.root,
+                text=parts[index],
+                bg="white",
+                fg="black",
+                font=("Arial", 10),
+                wraplength=180,
+                justify="center",
+                bd=2,
+                relief="solid"
+            )
+            self.quote_label.place(x=20, y=0)
+
+            current_index += 1
+            if current_index < len(parts):
+                self.root.after(2000, lambda: show_part(current_index))
+            else:
+                self.root.after(4000, hide)
+
+        def hide():
+            if self.quote_label:
+                self.quote_label.destroy()
+                self.quote_label = None
+            self.quote_visible = False
+            self.gesturing = False
+            self.canvas.itemconfig(self.current_image, image=self.idle_image)
+
+        show_part(current_index)
+
 
     def behavior_loop(self):
         while self.running:
@@ -95,6 +159,7 @@ if __name__ == "__main__":
     idle_path = os.path.join(script_dir, "giorgos1.png")
     walk_path = os.path.join(script_dir, "giorgoswalkleft.png")
     gesture_path = os.path.join(script_dir, "giorgos2.png")
+    lines_path = os.path.join(script_dir, "georgioslines.txt")
 
-    app = GiorgosApp(idle_path, walk_path, gesture_path)
+    app = GiorgosApp(idle_path, walk_path, gesture_path, lines_path)
     app.run()
